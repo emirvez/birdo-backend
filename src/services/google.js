@@ -1,11 +1,11 @@
 const env = require('../config/env');
 
-const VALID_ISSUERS = ['accounts.google.com', 'https://accounts.google.com'];
-
-async function verifyGoogleToken(idToken) {
-  const res = await fetch(
-    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
-  );
+async function verifyGoogleToken(accessToken) {
+  // chrome.identity.getAuthToken() returns an OAuth access token,
+  // so we use Google's userinfo endpoint to get the user's profile
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
 
   if (!res.ok) {
     throw Object.assign(new Error('Invalid Google token'), { status: 401 });
@@ -13,24 +13,12 @@ async function verifyGoogleToken(idToken) {
 
   const payload = await res.json();
 
-  // Verify audience matches our client ID
-  if (payload.aud !== env.googleClientId) {
-    throw Object.assign(new Error('Token audience mismatch'), { status: 401 });
-  }
-
-  // Verify issuer
-  if (!VALID_ISSUERS.includes(payload.iss)) {
-    throw Object.assign(new Error('Token issuer mismatch'), { status: 401 });
-  }
-
-  // Verify token is not expired
-  const now = Math.floor(Date.now() / 1000);
-  if (payload.exp && parseInt(payload.exp, 10) < now) {
-    throw Object.assign(new Error('Token expired'), { status: 401 });
+  if (!payload.sub || !payload.email) {
+    throw Object.assign(new Error('Incomplete Google profile'), { status: 401 });
   }
 
   // Verify email is verified
-  if (payload.email_verified !== 'true' && payload.email_verified !== true) {
+  if (!payload.email_verified) {
     throw Object.assign(new Error('Email not verified'), { status: 401 });
   }
 
