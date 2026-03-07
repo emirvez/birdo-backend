@@ -8,8 +8,15 @@ async function findOrCreateUser({ googleId, email, name }) {
   );
 
   if (existing.rows.length > 0) {
-    // Update name/email if changed
     const user = existing.rows[0];
+
+    // Reactivate soft-deleted user on login
+    if (user.deleted_at) {
+      await restoreUser(user.id);
+      user.deleted_at = null;
+    }
+
+    // Update name/email if changed
     if (user.email !== email || user.name !== name) {
       await db.query(
         'UPDATE users SET email = $1, name = $2, updated_at = NOW() WHERE id = $3',
@@ -62,4 +69,31 @@ async function updateUserStripe(userId, { stripeCustomerId, stripeSubscriptionId
   );
 }
 
-module.exports = { findOrCreateUser, getUserById, updateUserStripe };
+async function deleteUser(userId) {
+  // refresh_tokens and daily_usage cascade on user delete
+  const result = await db.query('DELETE FROM users WHERE id = $1', [userId]);
+  return result.rowCount > 0;
+}
+
+async function softDeleteUser(userId) {
+  await db.query(
+    'UPDATE users SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
+    [userId]
+  );
+}
+
+async function restoreUser(userId) {
+  await db.query(
+    'UPDATE users SET deleted_at = NULL, updated_at = NOW() WHERE id = $1',
+    [userId]
+  );
+}
+
+async function hardDeleteExpiredUsers() {
+  const result = await db.query(
+    "DELETE FROM users WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '7 days' RETURNING id"
+  );
+  return result.rows.map(r => r.id);
+}
+
+module.exports = { findOrCreateUser, getUserById, updateUserStripe, deleteUser, softDeleteUser, restoreUser, hardDeleteExpiredUsers };

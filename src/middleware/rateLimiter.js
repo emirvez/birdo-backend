@@ -5,11 +5,18 @@ const LIMITS = {
   pro: 10000,
 };
 
+function getEffectiveLimit(user) {
+  if (user.paymentGraceUntil && new Date(user.paymentGraceUntil) > new Date()) {
+    return 100; // Grace period limit
+  }
+  return LIMITS[user.tier] || LIMITS.free;
+}
+
 async function rateLimiter(req, res, next) {
   if (!req.user) return next();
 
   const { id, tier } = req.user;
-  const limit = LIMITS[tier] || LIMITS.free;
+  const limit = getEffectiveLimit(req.user);
   const today = new Date().toISOString().slice(0, 10);
 
   try {

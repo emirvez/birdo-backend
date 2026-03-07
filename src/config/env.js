@@ -17,4 +17,19 @@ const env = {
   appUrl: process.env.APP_URL || 'https://birdo.io',
 };
 
+// Validate required secrets are present in production
+if (env.nodeEnv === 'production') {
+  const required = ['databaseUrl', 'jwtAccessSecret', 'jwtRefreshSecret', 'groqApiKey', 'googleClientId'];
+  for (const key of required) {
+    if (!env[key]) {
+      console.error(`Missing required environment variable: ${key}`);
+      process.exit(1);
+    }
+  }
+  if (env.allowedOrigins.length === 0) {
+    console.error('ALLOWED_ORIGINS must be set in production');
+    process.exit(1);
+  }
+}
+
 module.exports = env;
